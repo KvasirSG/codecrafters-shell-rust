@@ -2,6 +2,8 @@
 use std::collections::HashMap;
 use std::io::{self, Write};
 use std::process;
+use std::path::Path;
+use std::fs;
 
 // Define a type alias for command handler functions
 // Each handler takes a slice of command arguments and returns a bool
@@ -46,6 +48,43 @@ fn exit_command(args: &[&str]) -> bool {
     process::exit(exit_code);
 }
 
+// Helper function to search for an executable in PATH
+// Returns Some(path) if found with execute permissions, None otherwise
+fn find_executable_in_path(command: &str) -> Option<String> {
+    // Get the PATH environment variable
+    let path_var = std::env::var("PATH").unwrap_or_default();
+
+    // Split PATH by the OS-specific delimiter
+    let delimiter = if cfg!(windows) { ";" } else { ":" };
+
+    // Search each directory in PATH
+    for dir in path_var.split(delimiter) {
+        let path = Path::new(dir).join(command);
+
+        // Check if the file exists
+        if path.exists() {
+            // Check if it has execute permissions
+            if let Ok(metadata) = fs::metadata(&path) {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    // On Unix, check if any execute bit is set
+                    if metadata.permissions().mode() & 0o111 != 0 {
+                        return path.to_str().map(|s| s.to_string());
+                    }
+                }
+                #[cfg(windows)]
+                {
+                    // On Windows, if the file exists, it's executable
+                    return path.to_str().map(|s| s.to_string());
+                }
+            }
+        }
+    }
+
+    None
+}
+
 // Handler for the 'type' builtin command
 // Tells you what kind of command something is (builtin, external program, or not found)
 fn type_command(args: &[&str]) -> bool {
@@ -60,11 +99,14 @@ fn type_command(args: &[&str]) -> bool {
     // Get the current registry of builtin commands
     let builtins = register_builtins();
 
-    // Check if the command exists in our builtin registry
+    // Check if the command exists in our builtin registry first
     if builtins.contains_key(cmd) {
         println!("{} is a shell builtin", cmd);
+    } else if let Some(executable_path) = find_executable_in_path(cmd) {
+        // Found an executable in PATH
+        println!("{} is {}", cmd, executable_path);
     } else {
-        // Command not found as a builtin
+        // Command not found as a builtin or in PATH
         println!("{}: not found", cmd);
     }
     true
