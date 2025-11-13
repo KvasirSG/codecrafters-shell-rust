@@ -1,7 +1,7 @@
 #[allow(unused_imports)]
 use std::collections::HashMap;
 use std::io::{self, Write};
-use std::process;
+use std::process::{self, Command};
 use std::path::Path;
 use std::fs;
 
@@ -85,6 +85,38 @@ fn find_executable_in_path(command: &str) -> Option<String> {
     None
 }
 
+// Helper function to execute an external program
+// Takes the program name and all arguments (including the program name as the first arg)
+fn execute_external_program(program: &str, args: &[&str]) -> bool {
+    // Try to find the executable in PATH
+    if let Some(executable_path) = find_executable_in_path(program) {
+        // Execute the program with all arguments
+        let mut cmd = Command::new(&executable_path);
+
+        // Add all arguments except the first one (which is the program name itself)
+        for arg in &args[1..] {
+            cmd.arg(arg);
+        }
+
+        // Execute and wait for the program to complete
+        match cmd.status() {
+            Ok(_status) => {
+                // Program executed successfully
+                true
+            }
+            Err(e) => {
+                // Failed to execute the program
+                println!("Error executing {}: {}", program, e);
+                true
+            }
+        }
+    } else {
+        // Program not found in PATH
+        println!("{}: command not found", program);
+        true
+    }
+}
+
 // Handler for the 'type' builtin command
 // Tells you what kind of command something is (builtin, external program, or not found)
 fn type_command(args: &[&str]) -> bool {
@@ -147,8 +179,8 @@ fn main() {
             // Found a builtin command - call its handler function
             handler(&parts);
         } else {
-            // Command not found - display error message
-            println!("{}: command not found", command);
+            // Not a builtin - try to execute as an external program
+            execute_external_program(parts[0], &parts);
         }
     }
 }
