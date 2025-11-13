@@ -4,6 +4,7 @@ use std::io::{self, Write};
 use std::process::{self, Command};
 use std::path::Path;
 use std::fs;
+use std::os::unix::process::CommandExt;
 
 // Define a type alias for command handler functions
 // Each handler takes a slice of command arguments and returns a bool
@@ -93,7 +94,13 @@ fn execute_external_program(program: &str, args: &[&str]) -> bool {
         // Execute the program with all arguments
         let mut cmd = Command::new(&executable_path);
 
-        // Add all arguments except the first one (which is the program name itself)
+        #[cfg(unix)]
+        {
+            // On Unix, use arg0 to set argv[0] to the original program name
+            cmd.arg0(program);
+        }
+
+        // Add all remaining arguments (argv[1..])
         for arg in &args[1..] {
             cmd.arg(arg);
         }
