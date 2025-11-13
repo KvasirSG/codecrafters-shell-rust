@@ -19,6 +19,7 @@ fn register_builtins() -> HashMap<&'static str, CommandHandler> {
     builtins.insert("echo", echo_command);
     builtins.insert("exit", exit_command);
     builtins.insert("type", type_command);
+    builtins.insert("pwd", pwd_command);
 
     builtins
 }
@@ -47,6 +48,26 @@ fn exit_command(args: &[&str]) -> bool {
         0
     };
     process::exit(exit_code);
+}
+
+// Handler for the 'pwd' builtin command
+// Prints the full absolute path of the current working directory
+fn pwd_command(_args: &[&str]) -> bool {
+    match std::env::current_dir() {
+        Ok(path) => {
+            // Print the absolute path as a string
+            if let Some(path_str) = path.to_str() {
+                println!("{}", path_str);
+            } else {
+                println!("Error: current directory path is not valid UTF-8");
+            }
+            true
+        }
+        Err(e) => {
+            println!("pwd: error retrieving current directory: {}", e);
+            true
+        }
+    }
 }
 
 // Helper function to search for an executable in PATH
@@ -151,43 +172,63 @@ fn type_command(args: &[&str]) -> bool {
     true
 }
 
-fn main() {
+// Reads a single command line from stdin
+// Returns Some(command) if a line was read, None if EOF was reached
+fn read_command_line() -> Option<String> {
+    print!("$ ");
+    io::stdout().flush().unwrap();
+
+    let mut command = String::new();
+    match io::stdin().read_line(&mut command) {
+        Ok(bytes_read) if bytes_read > 0 => Some(command),
+        _ => None,
+    }
+}
+
+// Parses a command line into command name and arguments
+// Returns a Vec of &str where the first element is the command name
+fn parse_command(command: &str) -> Vec<&str> {
+    command.trim().split_whitespace().collect()
+}
+
+// Executes a command (either builtin or external)
+// Takes the builtins registry and the parsed command parts
+fn execute_command(builtins: &HashMap<&str, CommandHandler>, parts: &[&str]) {
+    if let Some(handler) = builtins.get(parts[0]) {
+        // Found a builtin command - call its handler function
+        handler(parts);
+    } else {
+        // Not a builtin - try to execute as an external program
+        execute_external_program(parts[0], parts);
+    }
+}
+
+// Main shell loop - continuously reads and executes commands
+fn run_shell() {
     // Load all builtin commands into memory at startup
     let builtins = register_builtins();
 
     // Main shell loop - continuously read and execute commands
     loop {
-        // Display the shell prompt
-        print!("$ ");
-        io::stdout().flush().unwrap();
+        // Read user input
+        let command = match read_command_line() {
+            Some(cmd) => cmd,
+            None => break, // EOF reached
+        };
 
-        // Read the user's input line
-        let mut command = String::new();
-        let bytes_read = io::stdin().read_line(&mut command).unwrap();
-
-        // Check if we reached EOF (end of input, e.g., Ctrl+D or piped input ends)
-        if bytes_read == 0 {
-            break;
-        }
-
-        // Remove leading/trailing whitespace (including newline) from the input
-        let command = command.trim();
-
-        // Split the input into individual words (command and arguments)
-        let parts: Vec<&str> = command.split_whitespace().collect();
+        // Parse the command into parts
+        let parts = parse_command(&command);
 
         // Skip empty commands (user just pressed Enter)
         if parts.is_empty() {
             continue;
         }
 
-        // Try to find and execute the command in our builtin registry
-        if let Some(handler) = builtins.get(parts[0]) {
-            // Found a builtin command - call its handler function
-            handler(&parts);
-        } else {
-            // Not a builtin - try to execute as an external program
-            execute_external_program(parts[0], &parts);
-        }
+        // Execute the command
+        execute_command(&builtins, &parts);
     }
+}
+
+fn main() {
+    run_shell();
 }
