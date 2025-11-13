@@ -20,6 +20,7 @@ fn register_builtins() -> HashMap<&'static str, CommandHandler> {
     builtins.insert("exit", exit_command);
     builtins.insert("type", type_command);
     builtins.insert("pwd", pwd_command);
+    builtins.insert("cd", cd_command);
 
     builtins
 }
@@ -65,6 +66,32 @@ fn pwd_command(_args: &[&str]) -> bool {
         }
         Err(e) => {
             println!("pwd: error retrieving current directory: {}", e);
+            true
+        }
+    }
+}
+
+// Handler for the 'cd' builtin command
+// Changes the current working directory to the specified path
+fn cd_command(args: &[&str]) -> bool {
+    // Step 1: Check if a path argument was provided
+    if args.len() < 2 {
+        println!("cd: missing operand");
+        return true;
+    }
+
+    // Step 2: Get the path from the arguments (args[1] is the path)
+    let path = args[1];
+
+    // Step 3: Try to change to that directory
+    match std::env::set_current_dir(path) {
+        Ok(_) => {
+            // Success! Directory was changed
+            true
+        }
+        Err(_) => {
+            // Failed to change directory - print error message
+            println!("cd: {}: No such file or directory", path);
             true
         }
     }
