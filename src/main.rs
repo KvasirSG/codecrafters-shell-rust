@@ -34,6 +34,17 @@ fn main() {
             process::exit(exit_code);
         }
 
+        // Handle the echo builtin
+        if parts[0] == "echo" {
+            // Join all arguments after "echo" with spaces
+            if parts.len() > 1 {
+                println!("{}", parts[1..].join(" "));
+            } else {
+                println!();
+            }
+            continue;
+        }
+
         println!("{}: command not found", command);
     }
 }
